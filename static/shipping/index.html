@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Grams to Pounds & Ounces Converter</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+    background: #f7f7f7;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 100vh;
+  }
+  .container {
+    background: #fff;
+    padding: 1.25rem;
+    margin: 2rem 1rem;
+    border-radius: 12px;
+    box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+    max-width: 440px;
+    width: 100%;
+  }
+  h1 {
+    font-size: 1.25rem;
+    margin: 0 0 0.75rem 0;
+    text-align: center;
+  }
+  p.helper { text-align:center; margin: 0 0 1rem 0; color: #666; font-size: .95rem; }
+  label { display:block; font-weight:600; margin-bottom:.5rem; }
+  input[type="number"] {
+    width: 100%;
+    padding: 0.85rem 0.9rem;
+    font-size: 1rem;
+    border: 1px solid #d0d0d0;
+    border-radius: 10px;
+    box-sizing: border-box;
+  }
+  .resultBox {
+    margin-top: 1.25rem;
+    padding: 1rem;
+    background: #fafafa;
+    border: 1px solid #ececec;
+    border-radius: 10px;
+    text-align: center;
+  }
+  .resultValue { font-size: 1.25rem; font-weight: 700; }
+  .muted { color:#666; font-size: .9rem; }
+  details {
+    margin-top: 1.25rem;
+    background:#fff;
+    border:1px solid #e8e8e8;
+    border-radius: 10px;
+    padding: .75rem 1rem;
+  }
+  button {
+    display:inline-block;
+    padding: .65rem 1rem;
+    border-radius: 10px;
+    border: 1px solid #d0d0d0;
+    background: #f5f5f5;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  pre { background:#0b1020; color:#dbe1ff; padding: .75rem; border-radius: 8px; overflow:auto; }
+</style>
+</head>
+<body>
+  <div class="container">
+    <h1>Grams → Pounds & Ounces</h1>
+    <p class="helper">Rounded to the nearest ounce.</p>
+
+    <label for="gramsInput">Grams</label>
+    <input
+      id="gramsInput"
+      type="number"
+      inputmode="decimal"
+      step="any"
+      placeholder="Enter grams"
+      aria-describedby="roundingNote"
+    />
+
+    <div class="resultBox" role="status" aria-live="polite">
+      <div class="muted" id="roundingNote">Result</div>
+      <div class="resultValue" id="result">—</div>
+    </div>
+
+    <details>
+      <summary><strong>Built‑in tests</strong> (click to run)</summary>
+      <p class="muted">Verifies rounding and edge cases. Results appear below.</p>
+      <div style="display:flex; gap:.5rem; align-items:center; margin:.5rem 0 1rem 0;">
+        <button id="runTests" type="button">Run tests</button>
+        <span class="muted" id="testSummary"></span>
+      </div>
+      <pre id="testLog" aria-live="polite"></pre>
+    </details>
+  </div>
+
+<script type="module">
+  // Isolate all variables in module scope to avoid global name collisions
+  // (fixes issues like "Can't create duplicate variable: 'b'").
+
+  const OZ_PER_LB = 16;
+  const G_PER_OZ = 28.349523125; // exact conversion used by NIST
+
+  const gramsInput = document.getElementById('gramsInput');
+  const resultEl   = document.getElementById('result');
+
+  function formatLbOzFromGrams(grams) {
+    if (!Number.isFinite(grams) || grams < 0) return '—';
+    const roundedTotalOunces = Math.round(grams / G_PER_OZ); // nearest whole oz
+    const pounds = Math.floor(roundedTotalOunces / OZ_PER_LB);
+    const ounces = roundedTotalOunces % OZ_PER_LB;
+    return `${pounds} lb ${ounces} oz`;
+  }
+
+  function update() {
+    const g = parseFloat(gramsInput.value);
+    resultEl.textContent = formatLbOzFromGrams(g);
+  }
+
+  gramsInput.addEventListener('input', update);
+  // Initialize on load
+  update();
+
+  // === Simple test harness ===
+  const tests = [
+    { g: 0,               exp: '0 lb 0 oz',   note: 'zero' },
+    { g: 1,               exp: '0 lb 0 oz',   note: 'rounds down < 0.5 oz' },
+    { g: 28.349523125,    exp: '0 lb 1 oz',   note: 'exactly 1 oz' },
+    { g: 226.796185,      exp: '0 lb 8 oz',   note: 'exactly 8 oz' },
+    { g: 453.59237,       exp: '1 lb 0 oz',   note: 'exactly 1 lb' },
+    { g: 1000,            exp: '2 lb 3 oz',   note: '~35.274 oz → 35 oz' },
+    { g: 442.2525,        exp: '1 lb 0 oz',   note: '15.6 oz → rounds to 16 oz with carry' },
+    { g: '',              exp: '—',           note: 'empty input' },
+    { g: -5,              exp: '—',           note: 'negative input' },
+  ];
+
+  const testLog = document.getElementById('testLog');
+  const testSummary = document.getElementById('testSummary');
+
+  function runTests() {
+    const originalValue = gramsInput.value;
+    let passed = 0;
+    let failed = 0;
+    let lines = [];
+
+    for (const t of tests) {
+      gramsInput.value = String(t.g);
+      update();
+      const got = resultEl.textContent;
+      const ok = got === t.exp;
+      ok ? passed++ : failed++;
+      lines.push(`${ok ? '✅' : '❌'} g=${t.g === '' ? '""' : t.g} → ${got}  (expected ${t.exp}) — ${t.note}`);
+    }
+
+    gramsInput.value = originalValue;
+    update();
+
+    testSummary.textContent = `${passed} passed, ${failed} failed`;
+    testLog.textContent = lines.join('\n');
+  }
+
+  document.getElementById('runTests').addEventListener('click', runTests);
+</script>
+</body>
+</html>
