@@ -1,4 +1,4 @@
-baseURL = "https://example.com"
+baseURL = "https://app.entropy.ch"
 languageCode = "en-us"
 title = "Archie"
 theme="archie"
