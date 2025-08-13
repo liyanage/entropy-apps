@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Grams to Pounds & Ounces Converter</title>
+<title>Grams ⇄ Pounds & Ounces Converter</title>
 <style>
   :root { color-scheme: light dark; }
   body {
@@ -20,19 +20,16 @@
   .container {
     background: #fff;
     padding: 1.25rem;
-    margin: 2rem 1rem;
+    margin: 2rem 1.25rem; /* increased lateral margin for mobile */
     border-radius: 12px;
     box-shadow: 0 6px 16px rgba(0,0,0,0.08);
-    max-width: 440px;
-    width: 100%;
+    max-width: 480px;
+    width: calc(100% - 2.5rem); /* ensures lateral space on small screens */
   }
-  h1 {
-    font-size: 1.25rem;
-    margin: 0 0 0.75rem 0;
-    text-align: center;
-  }
+  h1 { font-size: 1.25rem; margin: 0 0 .25rem 0; text-align: center; }
   p.helper { text-align:center; margin: 0 0 1rem 0; color: #666; font-size: .95rem; }
   label { display:block; font-weight:600; margin-bottom:.5rem; }
+  .row { display:flex; gap:.75rem; }
   input[type="number"] {
     width: 100%;
     padding: 0.85rem 0.9rem;
@@ -47,17 +44,9 @@
     background: #fafafa;
     border: 1px solid #ececec;
     border-radius: 10px;
-    text-align: center;
   }
-  .resultValue { font-size: 1.25rem; font-weight: 700; }
-  .muted { color:#666; font-size: .9rem; }
-  details {
-    margin-top: 1.25rem;
-    background:#fff;
-    border:1px solid #e8e8e8;
-    border-radius: 10px;
-    padding: .75rem 1rem;
-  }
+  .resultTitle { text-align:center; color:#666; margin:0 0 .5rem 0; }
+  .btnRow { display:flex; gap:.5rem; justify-content:center; margin-top:.5rem; align-items:center; }
   button {
     display:inline-block;
     padding: .65rem 1rem;
@@ -67,100 +56,187 @@
     font-weight: 600;
     cursor: pointer;
   }
-  pre { background:#0b1020; color:#dbe1ff; padding: .75rem; border-radius: 8px; overflow:auto; }
+  .muted { color:#666; font-size:.9rem; }
+  details { margin-top: 1rem; background:#fff; border:1px solid #ececec; border-radius:10px; padding:.75rem 1rem; }
+  pre { background:#0b1020; color:#dbe1ff; padding:.75rem; border-radius:8px; overflow:auto; }
 </style>
 </head>
 <body>
   <div class="container">
-    <h1>Grams → Pounds & Ounces</h1>
-    <p class="helper">Rounded to the nearest ounce.</p>
+    <h1>Grams ⇄ Pounds & Ounces</h1>
+    <p class="helper">Round-trip editable: change <em>either</em> grams or lbs/oz; the other updates in real time. Grams → lbs/oz rounds to nearest ounce.</p>
 
-    <label for="gramsInput">Grams</label>
-    <input
-      id="gramsInput"
-      type="number"
-      inputmode="decimal"
-      step="any"
-      placeholder="Enter grams"
-      aria-describedby="roundingNote"
-    />
+    <section>
+      <label for="gramsInput">Grams</label>
+      <input id="gramsInput" type="number" inputmode="decimal" step="any" placeholder="Enter grams" />
+    </section>
 
-    <div class="resultBox" role="status" aria-live="polite">
-      <div class="muted" id="roundingNote">Result</div>
-      <div class="resultValue" id="result">—</div>
+    <div class="resultBox" aria-live="polite">
+      <div class="row" role="group" aria-labelledby="lbs-oz-label">
+        <div style="flex:1">
+          <label id="lbs-oz-label" for="lbsInput">Pounds</label>
+          <input id="lbsInput" type="number" inputmode="numeric" step="1" min="0" placeholder="0" />
+        </div>
+        <div style="flex:1">
+          <label for="ozInput">Ounces</label>
+          <input id="ozInput" type="number" inputmode="numeric" step="1" min="0" max="15" placeholder="0" />
+        </div>
+      </div>
+      <div class="btnRow">
+        <button id="copyBtn" type="button" aria-disabled="true" disabled>Copy</button>
+        <span id="copyMsg" class="muted" aria-live="polite"></span>
+      </div>
     </div>
 
     <details>
       <summary><strong>Built‑in tests</strong> (click to run)</summary>
-      <p class="muted">Verifies rounding and edge cases. Results appear below.</p>
-      <div style="display:flex; gap:.5rem; align-items:center; margin:.5rem 0 1rem 0;">
+      <p class="muted">Verifies both directions, rounding to nearest ounce, 16‑oz carry, and edge cases.</p>
+      <div class="btnRow" style="justify-content:flex-start">
         <button id="runTests" type="button">Run tests</button>
-        <span class="muted" id="testSummary"></span>
+        <span id="testSummary" class="muted"></span>
       </div>
-      <pre id="testLog" aria-live="polite"></pre>
+      <pre id="testLog"></pre>
     </details>
   </div>
 
 <script type="module">
-  // Isolate all variables in module scope to avoid global name collisions
-  // (fixes issues like "Can't create duplicate variable: 'b'").
-
   const OZ_PER_LB = 16;
-  const G_PER_OZ = 28.349523125; // exact conversion used by NIST
+  const G_PER_OZ = 28.349523125;
 
   const gramsInput = document.getElementById('gramsInput');
-  const resultEl   = document.getElementById('result');
+  const lbsInput   = document.getElementById('lbsInput');
+  const ozInput    = document.getElementById('ozInput');
+  const copyBtn    = document.getElementById('copyBtn');
+  const copyMsg    = document.getElementById('copyMsg');
 
-  function formatLbOzFromGrams(grams) {
-    if (!Number.isFinite(grams) || grams < 0) return '—';
-    const roundedTotalOunces = Math.round(grams / G_PER_OZ); // nearest whole oz
-    const pounds = Math.floor(roundedTotalOunces / OZ_PER_LB);
-    const ounces = roundedTotalOunces % OZ_PER_LB;
-    return `${pounds} lb ${ounces} oz`;
+  function gramsToRoundedTotalOunces(grams) {
+    return Math.round(grams / G_PER_OZ);
+  }
+  function totalOuncesToLbOz(totalOz) {
+    const pounds = Math.floor(totalOz / OZ_PER_LB);
+    const ounces = totalOz % OZ_PER_LB;
+    return { pounds, ounces };
+  }
+  function lbOzToTotalOunces(lb, oz) {
+    return lb * OZ_PER_LB + oz;
+  }
+  function sanitizeNonNegativeNumber(v) {
+    const n = Number(v);
+    return Number.isFinite(n) && n >= 0 ? n : null;
   }
 
-  function update() {
-    const g = parseFloat(gramsInput.value);
-    resultEl.textContent = formatLbOzFromGrams(g);
+  function updateUI(source) {
+    if (source === 'grams') {
+      const g = sanitizeNonNegativeNumber(gramsInput.value);
+      if (g === null) {
+        lbsInput.value = '';
+        ozInput.value = '';
+        setCopyEnabled(false);
+        return;
+      }
+      const totalRoundedOz = gramsToRoundedTotalOunces(g);
+      const { pounds, ounces } = totalOuncesToLbOz(totalRoundedOz);
+      lbsInput.value = String(pounds);
+      ozInput.value = String(ounces);
+      setCopyEnabled(true);
+    } else if (source === 'lbsoz') {
+      let lb = sanitizeNonNegativeNumber(lbsInput.value);
+      let oz = sanitizeNonNegativeNumber(ozInput.value);
+      if (lb === null || oz === null) {
+        gramsInput.value = '';
+        setCopyEnabled(false);
+        return;
+      }
+      if (oz >= OZ_PER_LB) {
+        const carry = Math.floor(oz / OZ_PER_LB);
+        lb += carry;
+        oz = oz % OZ_PER_LB;
+        lbsInput.value = String(lb);
+        ozInput.value = String(oz);
+      }
+      const grams = Math.round(lbOzToTotalOunces(lb, oz) * G_PER_OZ);
+      gramsInput.value = String(grams);
+      setCopyEnabled(true);
+    }
   }
 
-  gramsInput.addEventListener('input', update);
-  // Initialize on load
-  update();
+  function setCopyEnabled(enabled) {
+    copyBtn.disabled = !enabled;
+    copyBtn.setAttribute('aria-disabled', String(!enabled));
+    if (!enabled) copyMsg.textContent = '';
+  }
 
-  // === Simple test harness ===
+  gramsInput.addEventListener('input', () => updateUI('grams'));
+  lbsInput.addEventListener('input', () => updateUI('lbsoz'));
+  ozInput.addEventListener('input', () => updateUI('lbsoz'));
+  setCopyEnabled(false);
+
+  async function copyResult() {
+    const lb = sanitizeNonNegativeNumber(lbsInput.value);
+    const oz = sanitizeNonNegativeNumber(ozInput.value);
+    if (lb === null || oz === null) return;
+    const text = `${Math.trunc(lb)} lb ${oz} oz`;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+        document.body.appendChild(ta); ta.focus(); ta.select();
+        document.execCommand('copy'); ta.remove();
+      }
+      copyBtn.textContent = 'Copied!';
+      copyMsg.textContent = '';
+      setTimeout(() => (copyBtn.textContent = 'Copy'), 1500);
+    } catch (err) {
+      copyMsg.textContent = 'Copy failed';
+      setTimeout(() => (copyMsg.textContent = ''), 1500);
+    }
+  }
+  copyBtn.addEventListener('click', copyResult);
+
   const tests = [
-    { g: 0,               exp: '0 lb 0 oz',   note: 'zero' },
-    { g: 1,               exp: '0 lb 0 oz',   note: 'rounds down < 0.5 oz' },
-    { g: 28.349523125,    exp: '0 lb 1 oz',   note: 'exactly 1 oz' },
-    { g: 226.796185,      exp: '0 lb 8 oz',   note: 'exactly 8 oz' },
-    { g: 453.59237,       exp: '1 lb 0 oz',   note: 'exactly 1 lb' },
-    { g: 1000,            exp: '2 lb 3 oz',   note: '~35.274 oz → 35 oz' },
-    { g: 442.2525,        exp: '1 lb 0 oz',   note: '15.6 oz → rounds to 16 oz with carry' },
-    { g: '',              exp: '—',           note: 'empty input' },
-    { g: -5,              exp: '—',           note: 'negative input' },
+    { kind:'g2lo', g: 0,            exp:{lb:0, oz:0}, note:'zero' },
+    { kind:'g2lo', g: 1,            exp:{lb:0, oz:0}, note:'< 0.5 oz rounds down' },
+    { kind:'g2lo', g: 28.349523125, exp:{lb:0, oz:1}, note:'exactly 1 oz' },
+    { kind:'g2lo', g: 226.796185,   exp:{lb:0, oz:8}, note:'exactly 8 oz' },
+    { kind:'g2lo', g: 453.59237,    exp:{lb:1, oz:0}, note:'exactly 1 lb' },
+    { kind:'g2lo', g: 1000,         exp:{lb:2, oz:3}, note:'~35.274 oz → 35 oz' },
+    { kind:'g2lo', g: 442.2525,     exp:{lb:1, oz:0}, note:'15.6 oz → 16 oz carry' },
+    { kind:'lo2g', lb:0, oz:0,      expG:0,       note:'zero' },
+    { kind:'lo2g', lb:1, oz:0,      expG:453.592, note:'1 lb' },
+    { kind:'lo2g', lb:0, oz:1,      expG:28.35,   note:'1 oz' },
+    { kind:'lo2g', lb:1, oz:8,      expG:680.389, note:'1.5 lb' },
+    { kind:'lo2g', lb:0, oz:24,     expG:680.389, note:'normalize 24 oz' },
   ];
 
   const testLog = document.getElementById('testLog');
   const testSummary = document.getElementById('testSummary');
 
-  function runTests() {
-    const originalValue = gramsInput.value;
-    let passed = 0;
-    let failed = 0;
-    let lines = [];
+  function almostEqual(a,b,eps=1) { return Math.abs(a-b) <= eps; }
 
-    for (const t of tests) {
+  function runTests() {
+    const saveG = gramsInput.value, saveLb = lbsInput.value, saveOz = ozInput.value;
+    let passed = 0, failed = 0; const lines = [];
+
+    for (const t of tests.filter(x=>x.kind==='g2lo')) {
       gramsInput.value = String(t.g);
-      update();
-      const got = resultEl.textContent;
-      const ok = got === t.exp;
+      updateUI('grams');
+      const ok = Number(lbsInput.value) === t.exp.lb && Number(ozInput.value) === t.exp.oz;
       ok ? passed++ : failed++;
-      lines.push(`${ok ? '✅' : '❌'} g=${t.g === '' ? '""' : t.g} → ${got}  (expected ${t.exp}) — ${t.note}`);
+      lines.push(`${ok?'✅':'❌'} g=${t.g} → ${lbsInput.value} lb ${ozInput.value} oz (exp ${t.exp.lb} lb ${t.exp.oz} oz) — ${t.note}`);
+    }
+    for (const t of tests.filter(x=>x.kind==='lo2g')) {
+      lbsInput.value = String(t.lb);
+      ozInput.value = String(t.oz);
+      updateUI('lbsoz');
+      const ok = almostEqual(Number(gramsInput.value), Math.round(t.expG));
+      ok ? passed++ : failed++;
+      lines.push(`${ok?'✅':'❌'} ${t.lb} lb ${t.oz} oz → ${gramsInput.value} g (≈ ${Math.round(t.expG)} g exp) — ${t.note}`);
     }
 
-    gramsInput.value = originalValue;
-    update();
+    gramsInput.value = saveG; lbsInput.value = saveLb; ozInput.value = saveOz;
+    setCopyEnabled(gramsInput.value !== '' || (lbsInput.value !== '' && ozInput.value !== ''));
 
     testSummary.textContent = `${passed} passed, ${failed} failed`;
     testLog.textContent = lines.join('\n');
